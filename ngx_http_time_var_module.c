@@ -7,6 +7,14 @@ typedef struct {
     unsigned       len:3;
 } ngx_http_time_item_t;
 
+/*static ngx_int_t ngx_http_time_log_iso8601_msec_variable(
+    ngx_http_request_t *r,
+    ngx_http_variable_value_t *v,
+    uintptr_t data);*/
+static ngx_int_t ngx_http_time_string_msec_variable(
+    ngx_http_request_t *r,
+    ngx_http_variable_value_t *v,
+    uintptr_t data);
 static ngx_int_t ngx_http_time_string_variable(
     ngx_http_request_t *r,
     ngx_http_variable_value_t *v,
@@ -67,9 +75,21 @@ static ngx_http_variable_t  ngx_http_time_vars[] = {
       (uintptr_t)&ngx_cached_err_log_time,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
+    //format: 1970/09/28 12:00:00.000
+    { ngx_string("tm_err_log_time_msec"), NULL,
+      ngx_http_time_string_msec_variable,
+      (uintptr_t)&ngx_cached_err_log_time,
+      NGX_HTTP_VAR_NOCACHEABLE, 0 },
+
     //format: Mon, 28 Sep 1970 06:00:00 GMT
     { ngx_string("tm_http_time"), NULL,
       ngx_http_time_string_variable,
+      (uintptr_t)&ngx_cached_http_time,
+      NGX_HTTP_VAR_NOCACHEABLE, 0 },
+
+    //format: Mon, 28 Sep 1970 06:00:00.000 GMT
+    { ngx_string("tm_http_time_msec"), NULL,
+      ngx_http_time_string_msec_variable,
       (uintptr_t)&ngx_cached_http_time,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
@@ -79,11 +99,28 @@ static ngx_http_variable_t  ngx_http_time_vars[] = {
       (uintptr_t)&ngx_cached_http_log_time,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
+    //format: 28/Sep/1970:12:00:00.000 +0600
+    { ngx_string("tm_http_log_time_msec"), NULL,
+      ngx_http_time_string_msec_variable,
+      (uintptr_t)&ngx_cached_http_log_time,
+      NGX_HTTP_VAR_NOCACHEABLE, 0 },
+
     //format: 1970-09-28T12:00:00+06:00
     { ngx_string("tm_http_log_iso8601"), NULL,
       ngx_http_time_string_variable,
       (uintptr_t)&ngx_cached_http_log_iso8601,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
+
+    //format: 1970-09-28T12:00:00.000+06:00
+    { ngx_string("tm_http_log_iso8601_msec"), NULL,
+      ngx_http_time_string_msec_variable,
+      (uintptr_t)&ngx_cached_http_log_iso8601,
+      NGX_HTTP_VAR_NOCACHEABLE, 0 },
+
+/*    { ngx_string("tm_http_log_iso8601_msec"), NULL,
+      ngx_http_time_log_iso8601_msec_variable,
+      NULL,
+      NGX_HTTP_VAR_NOCACHEABLE, 0 },*/
 
     { ngx_string("tm_year"), NULL,
       ngx_http_time_item_variable,
@@ -144,6 +181,20 @@ ngx_http_time_add_vars(ngx_conf_t *cf)
     return NGX_OK;
 }
 
+/*static ngx_int_t
+ngx_http_time_log_iso8601_msec_variable(ngx_http_request_t *r,
+                              ngx_http_variable_value_t *v,
+                              uintptr_t data)
+{
+    ngx_str_t *str = (ngx_str_t *)data;
+    v->len = str->len;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = str->data;
+    return NGX_OK;
+}*/
+
 static ngx_int_t
 ngx_http_time_string_variable(ngx_http_request_t *r,
                               ngx_http_variable_value_t *v,
@@ -155,6 +206,38 @@ ngx_http_time_string_variable(ngx_http_request_t *r,
     v->no_cacheable = 0;
     v->not_found = 0;
     v->data = str->data;
+    return NGX_OK;
+}
+
+static ngx_int_t
+ngx_http_time_string_msec_variable(ngx_http_request_t *r,
+                              ngx_http_variable_value_t *v,
+                              uintptr_t data)
+{
+    ngx_str_t *str = (ngx_str_t *)data;
+    v->len = str->len + 4;
+    if (!(v->data = ngx_pnalloc(r->pool, v->len))) return NGX_ERROR;
+    u_char *p = v->data;
+    ngx_time_t *tp = ngx_timeofday();
+    if (str == &ngx_cached_err_log_time) {
+        p = ngx_copy(p, str->data, str->len);
+        ngx_snprintf(p, 4, ".%03M", tp->msec);
+    } else if (str == &ngx_cached_http_time) {
+        p = ngx_copy(p, str->data, sizeof("Mon, 28 Sep 1970 06:00:00") - 1);
+        p = ngx_snprintf(p, 4, ".%03M", tp->msec);
+        p = ngx_copy(p, str->data + sizeof("Mon, 28 Sep 1970 06:00:00") - 1, str->len - sizeof("Mon, 28 Sep 1970 06:00:00") + 1);
+    } else if (str == &ngx_cached_http_log_time) {
+        p = ngx_copy(p, str->data, sizeof("28/Sep/1970:12:00:00") - 1);
+        p = ngx_snprintf(p, 4, ".%03M", tp->msec);
+        p = ngx_copy(p, str->data + sizeof("28/Sep/1970:12:00:00") - 1, str->len - sizeof("28/Sep/1970:12:00:00") + 1);
+    } else if (str == &ngx_cached_http_log_iso8601) {
+        p = ngx_copy(p, str->data, sizeof("1970-09-28T12:00:00") - 1);
+        p = ngx_snprintf(p, 4, ".%03M", tp->msec);
+        p = ngx_copy(p, str->data + sizeof("1970-09-28T12:00:00") - 1, str->len - sizeof("1970-09-28T12:00:00") + 1);
+    }
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
     return NGX_OK;
 }
 
