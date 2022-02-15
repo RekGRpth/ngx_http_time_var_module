@@ -7,10 +7,6 @@ typedef struct {
     unsigned       len:3;
 } ngx_http_time_item_t;
 
-/*static ngx_int_t ngx_http_time_log_iso8601_msec_variable(
-    ngx_http_request_t *r,
-    ngx_http_variable_value_t *v,
-    uintptr_t data);*/
 static ngx_int_t ngx_http_time_string_msec_variable(
     ngx_http_request_t *r,
     ngx_http_variable_value_t *v,
@@ -31,6 +27,8 @@ static ngx_int_t ngx_http_time_tosec_variable(
     ngx_http_request_t *r,
     ngx_http_variable_value_t *v,
     uintptr_t data);
+static ngx_int_t ngx_http_variable_tid(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data);
 
 static ngx_int_t ngx_http_time_add_vars(ngx_conf_t *cf);
 
@@ -117,11 +115,6 @@ static ngx_http_variable_t  ngx_http_time_vars[] = {
       (uintptr_t)&ngx_cached_http_log_iso8601,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
-/*    { ngx_string("tm_http_log_iso8601_msec"), NULL,
-      ngx_http_time_log_iso8601_msec_variable,
-      NULL,
-      NGX_HTTP_VAR_NOCACHEABLE, 0 },*/
-
     { ngx_string("tm_year"), NULL,
       ngx_http_time_item_variable,
       (uintptr_t)&ngx_http_time_item_info[0],
@@ -160,6 +153,8 @@ static ngx_http_variable_t  ngx_http_time_vars[] = {
       ngx_http_time_tomsec_variable, 0,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
+    { ngx_string("tid"), NULL, ngx_http_variable_tid,
+      0, 0, 0 },
 
     { ngx_null_string, NULL, NULL, 0, 0, 0 }
 };
@@ -180,20 +175,6 @@ ngx_http_time_add_vars(ngx_conf_t *cf)
 
     return NGX_OK;
 }
-
-/*static ngx_int_t
-ngx_http_time_log_iso8601_msec_variable(ngx_http_request_t *r,
-                              ngx_http_variable_value_t *v,
-                              uintptr_t data)
-{
-    ngx_str_t *str = (ngx_str_t *)data;
-    v->len = str->len;
-    v->valid = 1;
-    v->no_cacheable = 0;
-    v->not_found = 0;
-    v->data = str->data;
-    return NGX_OK;
-}*/
 
 static ngx_int_t
 ngx_http_time_string_variable(ngx_http_request_t *r,
@@ -296,5 +277,25 @@ ngx_http_time_tosec_variable(ngx_http_request_t *r,
     v->no_cacheable = 0;
     v->not_found = 0;
     v->data = p;
+    return NGX_OK;
+}
+
+static ngx_int_t
+ngx_http_variable_tid(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data)
+{
+    u_char  *p;
+
+    p = ngx_pnalloc(r->pool, NGX_INT64_LEN);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    v->len = ngx_sprintf(p, NGX_TID_T_FMT, ngx_log_tid) - p;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = p;
+
     return NGX_OK;
 }
